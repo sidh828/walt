@@ -5,6 +5,8 @@ use walkdir::WalkDir;
 const VALID_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "ico", "svg", "ppm", "pgm", "pbm",
     "pam", "hdr", "exr", "ff", "avif", "jxl",
+    // videos, previewed through ffmpeg (see video.rs)
+    "mp4", "webm", "mkv", "mov",
 ];
 
 #[derive(Debug, Clone)]

@@ -1,5 +1,10 @@
 # Walt
 
+> **This fork runs on X11** (e.g. bspwm) instead of Hyprland: wallpapers are applied by
+> `$WALT_SET_WALLPAPER`, else `~/.config/scripts/set-wallpaper.sh`, else `feh --bg-fill`
+> (see `src/backend/x11.rs`). Every monitor gets the same wallpaper. Videos
+> (mp4/webm/mkv/mov) are listed too, previewed via ffmpeg. hyprpaper isn't needed.
+
 Walt is a wallpaper manager for Hyprland with both a terminal UI and a native desktop GUI. It lets you browse, preview, apply, randomize, and rotate wallpapers using `hyprpaper`, while keeping the TUI fast for keyboard-heavy workflows and the GUI focused on preview-driven browsing.
 
 ![Walt banner](assets/walt-banner.jpg)

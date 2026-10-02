@@ -56,9 +56,12 @@ impl ThumbnailCache {
     ) -> PathBuf {
         let path = original_path.as_ref();
         let hash = Self::hash_path(path, profile);
-        let ext = path.extension().unwrap_or_default();
-        self.cache_dir
-            .join(format!("{}.{}", hash, ext.to_string_lossy()))
+        let ext = if crate::video::is_video(path) {
+            "png".into() // a still frame stands in for a video
+        } else {
+            path.extension().unwrap_or_default().to_string_lossy()
+        };
+        self.cache_dir.join(format!("{}.{}", hash, ext))
     }
 
     pub fn generate_thumbnail<P: AsRef<Path>>(
@@ -74,8 +77,11 @@ impl ThumbnailCache {
         }
 
         // Generate a preview-sized image that preserves the original aspect ratio.
-        let img = image::open(original_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open image: {}", e))?;
+        let img = if crate::video::is_video(original_path) {
+            crate::video::first_frame(original_path)?
+        } else {
+            image::open(original_path).map_err(|e| anyhow::anyhow!("Failed to open image: {}", e))?
+        };
         let (max_width, max_height) = profile.dimensions();
 
         let resized = img.resize(max_width, max_height, FilterType::Lanczos3);

@@ -12,6 +12,8 @@ const INDEX_FILE: &str = "wallpapers.json";
 const VALID_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "ico", "svg", "ppm", "pgm", "pbm",
     "pam", "hdr", "exr", "ff", "avif", "jxl",
+    // videos, previewed through ffmpeg (see video.rs)
+    "mp4", "webm", "mkv", "mov",
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -135,7 +137,11 @@ fn build_indexed_wallpaper(
         }
     }
 
-    let dimensions = image::image_dimensions(path).ok();
+    let dimensions = if crate::video::is_video(path) {
+        crate::video::dimensions(path)
+    } else {
+        image::image_dimensions(path).ok()
+    };
     Some(IndexedWallpaper {
         path: path.to_path_buf(),
         name: path

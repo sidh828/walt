@@ -6,6 +6,7 @@ mod logging;
 mod shared;
 mod theme;
 mod ui;
+mod video;
 
 use std::env;
 use std::io::{self, BufRead, IsTerminal, Write};

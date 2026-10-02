@@ -192,7 +192,10 @@ pub fn run_rotation_daemon() -> Result<()> {
     let mut pending_monitor_additions = HashSet::new();
     let mut last_transient_backend_message = None;
     let (event_tx, event_rx) = mpsc::channel();
-    spawn_hyprland_event_listener(event_tx);
+    // Hyprland's monitor hotplug events; there's no such socket outside Hyprland
+    if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+        spawn_hyprland_event_listener(event_tx);
+    }
     let mut next_rotation_at = Instant::now()
         + handle_rotation_tick_outcome(
             run_rotation_iteration(&index)?,

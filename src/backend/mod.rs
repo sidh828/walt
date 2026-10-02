@@ -1,4 +1,6 @@
 pub mod download;
+// X11 backend (feh / set-wallpaper.sh) in place of hyprpaper; same interface.
+#[path = "x11.rs"]
 pub mod hyprpaper;
 pub mod random;
 pub mod rotation;
