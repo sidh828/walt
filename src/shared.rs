@@ -558,3 +558,15 @@ mod tests {
         );
     }
 }
+
+/// Position of a wallpaper in the "random" sort: a hash of its path and a
+/// seed picked once per run, so the order is shuffled on every launch but
+/// stays put while Walt is open.
+pub fn shuffle_key(path: &std::path::Path) -> u64 {
+    use std::hash::{Hash, Hasher};
+    static SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    SEED.get_or_init(rand::random::<u64>).hash(&mut hasher);
+    path.hash(&mut hasher);
+    hasher.finish()
+}

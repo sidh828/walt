@@ -115,6 +115,7 @@ impl SectionKind {
 enum SortMode {
     Name,
     Modified,
+    Random,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -182,6 +183,7 @@ impl SortMode {
     fn from_name(name: &str) -> Self {
         match name {
             "modified" => Self::Modified,
+            "random" => Self::Random,
             _ => Self::Name,
         }
     }
@@ -190,6 +192,7 @@ impl SortMode {
         match self {
             Self::Name => "name",
             Self::Modified => "modified",
+            Self::Random => "random",
         }
     }
 
@@ -197,13 +200,15 @@ impl SortMode {
         match self {
             Self::Name => "Name",
             Self::Modified => "Modified",
+            Self::Random => "Random",
         }
     }
 
     fn toggle(self) -> Self {
         match self {
             Self::Name => Self::Modified,
-            Self::Modified => Self::Name,
+            Self::Modified => Self::Random,
+            Self::Random => Self::Name,
         }
     }
 }
@@ -1689,6 +1694,9 @@ impl App {
                     .modified_unix_secs
                     .cmp(&left.modified_unix_secs)
                     .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase())),
+                SortMode::Random => crate::shared::shuffle_key(&left.path)
+                    .cmp(&crate::shared::shuffle_key(&right.path))
+                    .then_with(|| left.path.cmp(&right.path)),
             }
         });
         indices

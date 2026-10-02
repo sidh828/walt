@@ -72,12 +72,14 @@ impl SectionKind {
 enum SortMode {
     Name,
     Modified,
+    Random,
 }
 
 impl SortMode {
     fn from_name(name: &str) -> Self {
         match name {
             "modified" => Self::Modified,
+            "random" => Self::Random,
             _ => Self::Name,
         }
     }
@@ -571,6 +573,9 @@ impl GuiApp {
                     .modified_unix_secs
                     .cmp(&left.modified_unix_secs)
                     .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase())),
+                SortMode::Random => crate::shared::shuffle_key(&left.path)
+                    .cmp(&crate::shared::shuffle_key(&right.path))
+                    .then_with(|| left.path.cmp(&right.path)),
             }
         });
         indices

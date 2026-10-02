@@ -104,7 +104,7 @@ impl Config {
             rotation_same_wallpaper_on_all_displays:
                 default_rotation_same_wallpaper_on_all_displays(),
             rotation_interval_secs: 300,
-            all_sort: "name".to_string(),
+            all_sort: "random".to_string(),
             rotation_sort: "name".to_string(),
             saved_filters: vec![],
         }
@@ -332,6 +332,7 @@ impl Config {
 fn default_sort_name(name: String) -> String {
     match name.as_str() {
         "modified" => "modified".to_string(),
+        "random" => "random".to_string(),
         _ => "name".to_string(),
     }
 }
