@@ -3,10 +3,11 @@
 //!
 //! Wallpapers are applied by a setter command: `$WALT_SET_WALLPAPER`, else
 //! `~/.config/scripts/set-wallpaper.sh` if it exists, else `feh --bg-fill`.
-//! The setter covers the whole X screen, so every monitor shows the same
-//! wallpaper; per-monitor requests apply to all of them.
-//! The active wallpaper is read from `~/.cache/wallpaper/current` (written by
-//! set-wallpaper.sh) or, failing that, from `~/.fehbg`.
+//! Only set-wallpaper.sh can target one monitor (`--monitor NAME FILE`); with
+//! the others every monitor gets the same wallpaper.
+//! The active wallpapers are read from set-wallpaper.sh's state:
+//! `~/.cache/wallpaper/screen-<monitor>`, else `~/.cache/wallpaper/current`,
+//! else `~/.fehbg`.
 
 use std::{
     fs,
@@ -19,6 +20,7 @@ use log::{debug, info, warn};
 const SETTER_ENV: &str = "WALT_SET_WALLPAPER";
 const SETTER_SCRIPT: &str = ".config/scripts/set-wallpaper.sh";
 const CURRENT_FILE: &str = "wallpaper/current";
+const SCREEN_FILE_PREFIX: &str = "wallpaper/screen-";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveWallpaperAssignment {
@@ -95,23 +97,21 @@ pub fn set_wallpaper(wallpaper_path: &str) -> anyhow::Result<()> {
     if get_monitors().is_empty() {
         return Err(anyhow::anyhow!("No monitors found"));
     }
-    run_setter(Path::new(wallpaper_path))
+    run_setter(None, Path::new(wallpaper_path), true)
 }
 
 pub fn set_wallpaper_for_monitor(monitor_name: &str, wallpaper_path: &str) -> anyhow::Result<()> {
-    info!("applying wallpaper (whole screen on X11) monitor={monitor_name} path={wallpaper_path}");
-    run_setter(Path::new(wallpaper_path))
+    info!("applying wallpaper monitor={monitor_name} path={wallpaper_path}");
+    run_setter(Some(monitor_name), Path::new(wallpaper_path), true)
 }
 
 pub fn set_wallpapers_for_monitors(assignments: &[(String, PathBuf)]) -> anyhow::Result<()> {
     info!("applying wallpaper batch assignments={}", assignments.len());
-    let Some((_, first)) = assignments.first() else {
-        return Ok(());
-    };
-    if assignments.iter().any(|(_, path)| path != first) {
-        warn!("different wallpapers per monitor aren't supported on X11; using {}", first.display());
+    // recolour once, for the last one, rather than after every monitor
+    for (i, (monitor_name, wallpaper_path)) in assignments.iter().enumerate() {
+        run_setter(Some(monitor_name), wallpaper_path, i + 1 == assignments.len())?;
     }
-    run_setter(first)
+    Ok(())
 }
 
 #[allow(dead_code)]
@@ -121,23 +121,37 @@ pub fn get_active_wallpaper_assignments() -> anyhow::Result<Vec<ActiveWallpaperA
 
 #[allow(dead_code)]
 pub fn get_active_wallpapers() -> anyhow::Result<Vec<PathBuf>> {
-    Ok(current_wallpaper().into_iter().collect())
+    let mut wallpapers = Vec::new();
+    for assignment in get_active_wallpaper_assignments()? {
+        if !wallpapers.contains(&assignment.wallpaper_path) {
+            wallpapers.push(assignment.wallpaper_path);
+        }
+    }
+    Ok(wallpapers)
 }
 
 pub(crate) fn get_active_wallpaper_assignments_if_supported(
 ) -> anyhow::Result<Option<Vec<ActiveWallpaperAssignment>>> {
-    let Some(path) = current_wallpaper() else {
-        return Ok(Some(vec![]));
-    };
+    let fallback = current_wallpaper();
     Ok(Some(
         get_monitors()
             .into_iter()
-            .map(|monitor| ActiveWallpaperAssignment {
-                monitor_name: monitor.name,
-                wallpaper_path: path.clone(),
+            .filter_map(|monitor| {
+                let path = screen_wallpaper(&monitor.name).or_else(|| fallback.clone())?;
+                Some(ActiveWallpaperAssignment {
+                    monitor_name: monitor.name,
+                    wallpaper_path: path,
+                })
             })
             .collect(),
     ))
+}
+
+/// A wallpaper picked for this monitor alone (set-wallpaper.sh --monitor).
+fn screen_wallpaper(monitor_name: &str) -> Option<PathBuf> {
+    let file = dirs::cache_dir()?.join(format!("{SCREEN_FILE_PREFIX}{monitor_name}"));
+    let path = PathBuf::from(fs::read_to_string(file).ok()?.trim());
+    path.is_file().then_some(path)
 }
 
 fn current_wallpaper() -> Option<PathBuf> {
@@ -157,8 +171,20 @@ fn current_wallpaper() -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-fn run_setter(wallpaper: &Path) -> anyhow::Result<()> {
-    let mut command = setter_command();
+/// Apply `wallpaper` to `monitor`, or to every monitor if none is given (or the
+/// setter can't target one). `recolor` false skips set-wallpaper.sh's recolouring.
+fn run_setter(monitor: Option<&str>, wallpaper: &Path, recolor: bool) -> anyhow::Result<()> {
+    let (mut command, per_monitor) = setter_command();
+    if per_monitor {
+        if !recolor {
+            command.arg("--no-recolor");
+        }
+        if let Some(monitor) = monitor {
+            command.args(["--monitor", monitor]);
+        }
+    } else if monitor.is_some() {
+        warn!("this wallpaper setter can't target one monitor; applying to all");
+    }
     command.arg(wallpaper);
     debug!("running wallpaper setter {:?}", command);
     let output = command
@@ -175,18 +201,19 @@ fn run_setter(wallpaper: &Path) -> anyhow::Result<()> {
     }
 }
 
-fn setter_command() -> Command {
+/// The setter, and whether it takes set-wallpaper.sh's `--monitor`/`--no-recolor`.
+fn setter_command() -> (Command, bool) {
     if let Some(setter) = std::env::var_os(SETTER_ENV).filter(|s| !s.is_empty()) {
-        return Command::new(setter);
+        return (Command::new(setter), false);
     }
     if let Some(script) = dirs::home_dir().map(|home| home.join(SETTER_SCRIPT)) {
         if script.is_file() {
-            return Command::new(script);
+            return (Command::new(script), true);
         }
     }
     let mut feh = Command::new("feh");
     feh.arg("--bg-fill");
-    feh
+    (feh, false)
 }
 
 #[cfg(test)]
